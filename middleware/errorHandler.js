@@ -1,8 +1,23 @@
+const multer = require("multer");  
+
 const errorHandler = (err, req, res, next) => {
     console.error('Error:', err.message);
     console.error('Stack:', err.stack);
+
+    // Lỗi Multer
+    if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+            return res.status(400).json({ error: 'File too large. Maximum size is 5MB.' });
+        }
+        return res.status(400).json({ error: err.message });
+    }
+
+    // Lỗi không phải ảnh
+    if (err.message && err.message.includes('Only image files')) {
+        return res.status(400).json({ error: err.message });
+    }
     
-    // Lỗi validation schema (thiếu trường, sai kiểu dữ liệu)
+    // Lỗi validation schema
     if (err.name === 'ValidationError') {
         const messages = Object.values(err.errors).map(e => e.message);
         return res.status(400).json({ error: messages.join(', ') });
@@ -13,7 +28,7 @@ const errorHandler = (err, req, res, next) => {
         return res.status(400).json({ error: 'Invalid ID format' });
     }
 
-    // Lỗi duplicate key (trường unique)
+    // Lỗi duplicate key
     if (err.code === 11000) {
         const field = Object.keys(err.keyPattern)[0]; 
         const value = err.keyValue[field];           
