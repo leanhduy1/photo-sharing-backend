@@ -3,16 +3,9 @@ const router = express.Router();
 const User = require("../db/userModel");
 const asyncHandler = require("../middleware/asyncHandler");
 
+// POST /api/admin/login
 router.post("/login", asyncHandler(async (req, res) => {
     const { login_name, password } = req.body;
-
-    if (!login_name) {
-        return res.status(400).json({ error: "login_name is required" });
-    }
-
-    if (!password) {
-        return res.status(400).json({ error: "password is required" })
-    }
 
     const user = await User.findOne({ login_name: login_name, password: password }).lean();
 
@@ -35,6 +28,8 @@ router.post("/login", asyncHandler(async (req, res) => {
     });
 }));
 
+
+// POST /api/admin/logout
 router.post("/logout", (req, res) => {
     if (!req.session.user) {
         return res.status(400).json({ error: "No user currently logged in" });
@@ -47,6 +42,15 @@ router.post("/logout", (req, res) => {
         res.clearCookie('connect.sid');
         res.json({ message: "Logged out successfully" });
     });
+});
+
+
+// GET /api/admin/check
+router.get("/check", (req, res) => {
+    if (!req.session.user) {
+        return res.status(401).json({ error: "Not authenticated" });
+    }
+    res.json(req.session.user);
 });
 
 module.exports = router;
