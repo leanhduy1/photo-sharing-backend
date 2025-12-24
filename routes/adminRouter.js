@@ -13,6 +13,26 @@ router.post("/login", asyncHandler(async (req, res) => {
         return res.status(400).json({ error: "Invalid login name or password" });
     }
 
+    if (req.session.user) {
+        req.session.regenerate((err) => {
+            if (err) {
+                return res.status(500).json({ error: "Failed to regenerate session" });
+            }
+        });
+        req.session.user = {
+            _id: user._id,
+            login_name: user.login_name,
+            first_name: user.first_name,
+            last_name: user.last_name
+        };
+        return res.json({
+            _id: user._id,
+            first_name: user.first_name,
+            last_name: user.last_name,
+            login_name: user.login_name
+        });
+    }
+
     req.session.user = {
         _id: user._id,
         login_name: user.login_name,

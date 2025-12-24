@@ -19,7 +19,9 @@ router.get("/photosOfUser/:id", asyncHandler(async (req, res) => {
     return res.status(404).json({ error: "User not found" });
   }
   
-  const photos = await Photo.find({ user_id: user_id }).populate({ path: 'comments.user_id', select: '_id first_name last_name' }).sort({ date_time: -1 });
+  const photos = await Photo.find({ user_id: user_id })
+                            .populate({ path: 'comments.user_id', select: '_id first_name last_name' })
+                            .sort({ date_time: -1 });
 
   const result = photos.map(photo => ({
     _id: photo._id,
@@ -31,10 +33,36 @@ router.get("/photosOfUser/:id", asyncHandler(async (req, res) => {
       comment: comment.comment,
       date_time: comment.date_time,
       user: comment.user_id || null
-    }))
+    })),
+    likes: photo.likes?.length || 0,
+    isLiked: photo.likes?.some(id => id.equals(user_id))
   }));
 
   res.json(result);
+}));
+
+
+// POST /api/photo/new 
+router.post("/new", upload.single('photo'), asyncHandler(async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: "No photo uploaded" });
+  }
+
+  newPhoto = new Photo({
+    user_id: req.session.user._id,
+    file_name: req.file.filename,
+    date_time: new Date(),
+    comments: [],
+    likes: []
+  });
+  await newPhoto.save();
+
+  res.status(201).json({
+    _id: newPhoto._id,
+    user_id: newPhoto.user_id,
+    file_name: newPhoto.file_name,
+    date_time: newPhoto.date_time
+  });
 }));
 
 
@@ -73,26 +101,90 @@ router.post("/commentsOfPhoto/:photo_id", asyncHandler(async (req, res) => {
 }));
 
 
-// POST /api/photo/new 
-router.post("/new", upload.single('photo'), asyncHandler(async (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: "No photo uploaded" });
+// DELETE /api/photo/commentsOfPhoto/:photo_id/:comment_id
+router.delete("/commentsOfPhoto/:photo_id/:comment_id", asyncHandler(async (req, res) => {
+  const { photo_id, comment_id } = req.params;
+  const user_id = req.session.user._id;
+
+  const photo = await Photo.findById(photo_id);
+  if (!photo) {
+    return res.status(404).json({ error: "Photo not found" });
   }
 
-  newPhoto = new Photo({
-    user_id: req.session.user._id,
-    file_name: req.file.filename,
-    date_time: new Date(),
-    comments: []
-  });
-  await newPhoto.save();
+  const comment = photo.comments.id(comment_id);
+  if (!comment) {
+    return res.status(404).json({ error: "Comment not found" });
+  }
 
-  res.status(201).json({
-    _id: newPhoto._id,
-    user_id: newPhoto.user_id,
-    file_name: newPhoto.file_name,
-    date_time: newPhoto.date_time
+  if (!comment.user_id.equals(user_id)) {
+    return res.status(403).json({ error: "You can only delete your comments" });
+  }
+
+  photo.comments.pull(comment_id);
+  await photo.save();
+
+  res.json({ message: "Comment deleted successfully" });
+}));
+
+
+// PUT /api/photo/commentsOfPhoto/:photo_id/:comment_id
+router.put("/commentsOfPhoto/:photo_id/:comment_id", asyncHandler(async (req, res) => {
+  const { photo_id, comment_id } = req.params;
+  const user_id = req.session.user._id;
+  const commentText = req.body.comment;
+
+  if (!commentText?.trim()) {
+    return res.status(400).json({ error: "Comment cant be empty"});
+  }
+
+  const photo = await Photo.findById(photo_id);
+  if (!photo) {
+    return res.status(404).json({ error: "Photo not found" });
+  }
+
+  const comment = photo.comments.id(comment_id);
+  if (!comment) {
+    return res.status(404).json({ error: "Comment not found" });
+  }
+
+  if (!comment.user_id.equals(user_id)) {
+    return res.status(403).json({ error: "You can only edit your comments" });
+  }
+  
+  comment.comment = commentText;
+  await photo.save();
+
+  res.json({
+    _id: comment._id,
+    comment: comment.comment,
+    date_time: comment.date_time,
+    user_id: comment.user_id
   });
 }));
+
+// POST /api/photo/like/:photo_id
+router.post("/like/:photo_id", asyncHandler(async (req, res) => {
+  const { photo_id } = req.params;
+  const user_id = req.session.user._id;
+
+  const photo = await Photo.findById(photo_id);
+  if (!photo) {
+    return res.status(404).json({ error: "Photo not found"});
+  }
+
+  const likeIndex = photo.likes.findIndex(id => id.equals(user_id));
+  
+  if (likeIndex === -1) {
+    photo.likes.push(user_id);
+  } else {
+    photo.likes.splice(likeIndex, 1);
+  }
+
+  await photo.save();
+
+  res.json({ likes: photo.likes.length, isLiked: likeIndex === -1 });
+}));
+
+
 
 module.exports = router;
