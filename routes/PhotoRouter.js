@@ -210,5 +210,23 @@ router.post("/like/:photo_id", asyncHandler(async (req, res) => {
 }));
 
 
+router.get("/download/:photo_id", asyncHandler(async (req, res) => {
+  const { photo_id } = req.params;
+
+  const photo = await Photo.findById(photo_id);
+  if (!photo) {
+    return res.status(404).json({ error: "Photo not found" });
+  }
+
+  const filePath = path.join(__dirname, '..', 'images', photo.file_name);
+
+  // Kiểm tra file tồn tại
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: "File not found" });
+  }
+
+  // Set header để force download
+  res.download(filePath, photo.file_name);
+}));
 
 module.exports = router;
