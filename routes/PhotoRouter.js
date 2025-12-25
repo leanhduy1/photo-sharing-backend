@@ -6,7 +6,8 @@ const User = require("../db/userModel");
 const requireAuth = require("../middleware/auth");
 const upload = require("../middleware/upload");
 const mongoose = require("mongoose");
-
+const path = require("path");
+const fs = require("fs");
 
 router.use(requireAuth);
 
@@ -35,7 +36,7 @@ router.get("/photosOfUser/:id", asyncHandler(async (req, res) => {
       user: comment.user_id || null
     })),
     likes: photo.likes?.length || 0,
-    isLiked: photo.likes?.some(id => id.equals(user_id))
+    isLiked: photo.likes?.some(id => id.equals(req.session.user._id)) || false
   }));
 
   res.json(result);
@@ -65,6 +66,29 @@ router.post("/new", upload.single('photo'), asyncHandler(async (req, res) => {
   });
 }));
 
+// DELETE /api/photo/:photo_id
+router.delete("/:photo_id", asyncHandler(async (req, res) => {
+  const { photo_id } = req.params;
+  const user_id = req.session.user._id;
+
+  const photo = await Photo.findById(photo_id);
+  if (!photo) {
+    return res.status(404).json({ error: "Photo not found" });
+  }
+
+  if (!photo.user_id.equals(user_id)) {
+    return res.status(403).json({ error: "You can only delete your own photos" });
+  }
+
+  const filePath = path.join(__dirname, "..", "uploads", photo.file_name);
+  if (fs.existsSync(filePath)) {
+    fs.unlinkSync(filePath);
+  }
+
+  await Photo.deleteOne({ _id: photo_id });
+
+  res.json({ message: "Photo deleted successfully" });
+}));
 
 // POST /api/photo/commentsOfPhoto/:photo_id
 router.post("/commentsOfPhoto/:photo_id", asyncHandler(async (req, res) => {
